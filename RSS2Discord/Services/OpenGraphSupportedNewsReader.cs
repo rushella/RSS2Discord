@@ -1,4 +1,5 @@
-﻿using System.ServiceModel.Syndication;
+﻿using System.Net;
+using System.ServiceModel.Syndication;
 using System.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,10 +31,10 @@ public class OpenGraphSupportedNewsReader : INewsReader
 
     public async Task<IEnumerable<NewsMetadata>> GetUpdatesAsync()
     {
-        var rssFeed = LoadRss(_appSettings.RssSourceUrl);
-        
         var setting = _settingRepository.GetSetting("lastNewsTimestamp");
         var result = new List<NewsMetadata>();
+        
+        var rssFeed = await LoadRss(_appSettings.RssSourceUrl);
 
         if (rssFeed == null)
         {
@@ -89,15 +90,19 @@ public class OpenGraphSupportedNewsReader : INewsReader
         return result;
     }
 
-    private SyndicationFeed? LoadRss(Uri endpoint)
+    private async Task<SyndicationFeed?> LoadRss(Uri endpoint)
     {
-        var xmlReader = XmlReader.Create(endpoint.ToString());
+        var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Add("user-agent", "MyRSSReader/1.0");
 
+        var content = await httpClient.GetStreamAsync(endpoint);
+
+        XmlReader reader = XmlReader.Create(content);
         SyndicationFeed? rssFeed = null;
         
         try
         {
-            rssFeed = SyndicationFeed.Load(xmlReader);
+            rssFeed = SyndicationFeed.Load(reader);
         }
         catch (Exception ex)
         {
