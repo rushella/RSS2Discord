@@ -45,7 +45,7 @@ public static class Program
             .AddSingleton<SettingsFactory>()
             .AddSingleton(x => x.GetRequiredService<SettingsFactory>().GetAppSettings())
             .AddSingleton(new LiteDatabase(@"Rss2discordDb.db"))
-            .AddSingleton<IReadNewsRepository, ReadNewsRepository>()
+            .AddSingleton<ISettingRepository, SettingRepository>()
             .AddSingleton<INewsReader, OpenGraphSupportedNewsReader>()
             .AddSingleton<DiscordWebhookClient>()
             .AddSingleton<DiscordNewsPublisher>()

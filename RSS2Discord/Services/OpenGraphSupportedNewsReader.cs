@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.ServiceModel.Syndication;
-using System.Threading.Tasks;
+﻿using System.ServiceModel.Syndication;
 using System.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,14 +15,14 @@ public class OpenGraphSupportedNewsReader : INewsReader
 {
     private readonly AppSettings _appSettings;
     private readonly ILogger<OpenGraphSupportedNewsReader> _logger;
-    private readonly IReadNewsRepository _readNewsRepository;
+    private readonly ISettingRepository _settingRepository;
 
     public OpenGraphSupportedNewsReader(
         AppSettings appSettings,
         ILoggerFactory? loggerFactory,
-        IReadNewsRepository readNewsRepository)
+        ISettingRepository settingRepository)
     {
-        _readNewsRepository = readNewsRepository;
+        _settingRepository = settingRepository;
         _appSettings = appSettings;
         _logger = loggerFactory?.CreateLogger<OpenGraphSupportedNewsReader>()
                   ?? NullLoggerFactory.Instance.CreateLogger<OpenGraphSupportedNewsReader>();
@@ -34,45 +30,82 @@ public class OpenGraphSupportedNewsReader : INewsReader
 
     public async Task<IEnumerable<NewsMetadata>> GetUpdatesAsync()
     {
-        var xmlReader = XmlReader.Create(_appSettings.RssSourceUrl.ToString());
-        var rssFeed = SyndicationFeed.Load(xmlReader);
-        var lastReadNews = _readNewsRepository.GetLatestReadNewsAsync();
+        var rssFeed = LoadRss(_appSettings.RssSourceUrl);
+        
+        var setting = _settingRepository.GetSetting("lastNewsTimestamp");
         var result = new List<NewsMetadata>();
+
+        if (rssFeed == null)
+        {
+            return result;
+        }
+
+        DateTimeOffset.TryParse(setting?.Value, out var latestPublishDate);
 
         foreach (var item in rssFeed.Items)
         {
             var newsLink = item.Links.FirstOrDefault()?.Uri;
-
+            
             if (newsLink == null)
             {
                 _logger.LogError("Can't find RSS item source link. {Item}", item);
                 continue;
             }
 
-            if (lastReadNews != null &&
-                (lastReadNews.PublishDate >= item.PublishDate.UtcDateTime || lastReadNews.Url == newsLink))
+            if (latestPublishDate >= item.PublishDate)
             {
                 continue;
             }
 
+            latestPublishDate = item.PublishDate;
+
             try
             {
                 result.Add(await GetOpenGraphMetadata(newsLink));
+                
             }
             catch (Exception e)
             {
                 _logger.LogError(e,
                     "An error occured during reading Open Graph metadata. From {newsLink}.", newsLink);
             }
-
-            _readNewsRepository.AddLatestReadNewsAsync(new ReadNews
-            {
-                Url = newsLink,
-                PublishDate = item.PublishDate.UtcDateTime
-            });
         }
 
+        if (setting == null)
+        {
+            setting = new Setting
+            {
+                Key = "lastNewsTimestamp",
+                Value = latestPublishDate.ToString()
+            };
+        }
+        else
+        {
+            setting.Value = latestPublishDate.ToString();
+        }
+
+        _settingRepository.UpsertSetting(setting);
+        
         return result;
+    }
+
+    private SyndicationFeed? LoadRss(Uri endpoint)
+    {
+        var xmlReader = XmlReader.Create(endpoint.ToString());
+
+        SyndicationFeed? rssFeed = null;
+        
+        try
+        {
+            rssFeed = SyndicationFeed.Load(xmlReader);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex, "An error occured while getting RSS feed from {endpoint}", _appSettings.RssSourceUrl);
+        }
+
+        return rssFeed;
     }
 
     private static async Task<NewsMetadata> GetOpenGraphMetadata(Uri newsSource)

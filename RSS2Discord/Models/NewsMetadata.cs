@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace RSS2Discord.Models;
+﻿namespace RSS2Discord.Models;
 
 public class NewsMetadata
 {
