@@ -1,8 +1,4 @@
-﻿using System;
-using System.Net;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Text;
 using DSharpPlus;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;

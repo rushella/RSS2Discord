@@ -21,6 +21,7 @@ public class SettingRepository : ISettingRepository
     public void UpsertSetting(Setting setting)
     {
         var settings = _db.GetCollection<Setting>("Settings");
+        settings.EnsureIndex(x => x.Key);
         settings.Upsert(setting);
     }
 }
